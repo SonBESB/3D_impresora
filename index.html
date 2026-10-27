@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taller3D — Calculadora e inventario de impresión 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <div class="app-top">
+    <div class="brand">
+      <span class="eyebrow">Taller3D</span>
+      <h1>Costeo e inventario de impresión 3D</h1>
+    </div>
+    <div class="top-controls">
+      <nav class="tabs" role="tablist" aria-label="Secciones">
+        <button class="tab-btn active" data-tab="calc" role="tab" aria-selected="true">Calculadora</button>
+        <button class="tab-btn" data-tab="printers" role="tab" aria-selected="false">Impresoras</button>
+        <button class="tab-btn" data-tab="materials" role="tab" aria-selected="false">Filamento y resina</button>
+        <button class="tab-btn" data-tab="tools" role="tab" aria-selected="false">Herramientas</button>
+        <button class="tab-btn" data-tab="quotes" role="tab" aria-selected="false">Cotizaciones</button>
+      </nav>
+      <div class="icon-controls">
+        <button class="btn btn-icon" id="btn-theme-toggle" title="Cambiar tema" aria-label="Cambiar tema claro/oscuro">🌙</button>
+        <button class="btn btn-icon" id="btn-data-menu" title="Copia de seguridad de tus datos" aria-label="Exportar o importar datos">⚙</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CALCULADORA ===== -->
+  <section class="panel-view active" data-panel="calc">
+    <div class="layout">
+      <form id="calc-form" class="panel">
+
+        <div class="quickfill">
+          <label>
+            Usar impresora guardada
+            <select id="calcPrinterSelect">
+              <option value="">— Ninguna —</option>
+            </select>
+          </label>
+          <label>
+            Usar material guardado
+            <select id="calcMaterialSelect">
+              <option value="">— Ninguno —</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>1. Proyecto y material</legend>
+          <label>
+            Nombre del proyecto (opcional)
+            <input type="text" id="projectName" placeholder="Ej: Soporte para celular">
+          </label>
+          <label>
+            Tipo de material
+            <select id="materialType">
+              <option value="filamento">Filamento (FDM)</option>
+              <option value="resina">Resina (SLA/DLP)</option>
+            </select>
+          </label>
+          <div class="row">
+            <label>
+              <span id="weightLabel">Peso de filamento usado (g)</span>
+              <input type="number" id="filamentWeight" min="0" step="0.1" value="50" required>
+            </label>
+            <label>
+              <span id="priceLabel">Precio del filamento (CLP/kg)</span>
+              <input type="number" id="filamentPrice" min="0" step="100" value="12000" required>
+            </label>
+          </div>
+          <label>
+            Merma / purgas / soportes extra (%)
+            <input type="number" id="wastePercent" min="0" max="100" step="1" value="8">
+            <small id="wasteHint">Material perdido en purgas de nozzle, torres de purga, soportes y raft.</small>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>2. Tiempo de impresión</legend>
+          <div class="row">
+            <label>
+              Horas
+              <input type="number" id="printHours" min="0" step="1" value="3">
+            </label>
+            <label>
+              Minutos
+              <input type="number" id="printMinutes" min="0" max="59" step="1" value="30">
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>3. Electricidad</legend>
+          <div class="row">
+            <label>
+              Potencia de la impresora (W)
+              <input type="number" id="printerPower" min="0" step="10" value="200">
+              <small>FDM doméstica: ~120–300 W. Resina/UV: revisa la lámpara y la placa base.</small>
+            </label>
+            <label>
+              Tarifa eléctrica (CLP/kWh)
+              <input type="number" id="electricityRate" min="0" step="1" value="170">
+              <small>Residencial (BT1) en Chile suele rondar $130–$250/kWh según distribuidora y bloque — usa el valor real de tu boleta.</small>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>4. Depreciación de la impresora</legend>
+          <div class="row">
+            <label>
+              Valor de la impresora (CLP)
+              <input type="number" id="printerCost" min="0" step="1000" value="350000">
+            </label>
+            <label>
+              Vida útil estimada (horas)
+              <input type="number" id="printerLifespan" min="0" step="100" value="5000">
+              <small>Referencia habitual: 3.000–8.000 h según uso y mantención.</small>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>5. Mantención y consumibles</legend>
+          <div class="row">
+            <label>
+              Gasto mensual en mantención (CLP)
+              <input type="number" id="maintenanceMonthly" min="0" step="500" value="8000">
+              <small>Boquillas, correas, FEP/resina de limpieza, adhesivo, etc.</small>
+            </label>
+            <label>
+              Horas de impresión al mes (uso real)
+              <input type="number" id="monthlyHours" min="1" step="1" value="60">
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>6. Mano de obra</legend>
+          <div class="row">
+            <label>
+              Horas de diseño / preparación / post-proceso
+              <input type="number" id="laborHours" min="0" step="0.1" value="0.5">
+            </label>
+            <label>
+              Valor de tu hora (CLP/h)
+              <input type="number" id="laborRate" min="0" step="500" value="5000">
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>7. Riesgo y costos extra</legend>
+          <div class="row">
+            <label>
+              Tasa de fallas estimada (%)
+              <input type="number" id="failureRate" min="0" max="95" step="1" value="10">
+              <small>Prorratea el costo de piezas que fallan entre las que sí se venden.</small>
+            </label>
+            <label>
+              Embalaje + envío + otros (CLP)
+              <input type="number" id="extraCosts" min="0" step="100" value="1500">
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>8. Precio de venta</legend>
+          <div class="row">
+            <label>
+              Margen de ganancia deseado (%)
+              <input type="number" id="marginPercent" min="0" step="1" value="40">
+            </label>
+            <label>
+              Comisión de plataforma de venta (%)
+              <input type="number" id="platformFee" min="0" max="90" step="1" value="0">
+              <small>Ej: Mercado Libre, ferias online. Déjalo en 0 si vendes directo.</small>
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="button" class="btn" id="btn-reset">Restablecer valores</button>
+          <button type="button" class="btn" id="btn-save-quote">Guardar cotización</button>
+          <button type="button" class="btn btn-primary" id="btn-print-quote">Cotización para cliente</button>
+        </div>
+      </form>
+
+      <section class="panel result">
+        <h2>Desglose de costos</h2>
+        <dl class="breakdown" id="breakdown"></dl>
+        <div class="totals">
+          <div class="total-line">
+            <span>Costo total de producción</span>
+            <strong id="totalCost">$0</strong>
+          </div>
+          <div class="total-line highlight">
+            <span>Precio de venta sugerido</span>
+            <strong id="suggestedPrice">$0</strong>
+          </div>
+          <div class="total-line">
+            <span>Ganancia neta estimada</span>
+            <strong id="netProfit">$0</strong>
+          </div>
+          <div class="total-line small">
+            <span id="perUnitLabel">Precio por gramo</span>
+            <strong id="pricePerGram">$0</strong>
+          </div>
+          <div class="total-line small">
+            <span>Precio por hora de impresora</span>
+            <strong id="pricePerHour">$0</strong>
+          </div>
+          <div class="total-line small">
+            <span>Ganancia por hora de impresora</span>
+            <strong id="profitPerHour">$0</strong>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ===== IMPRESORAS ===== -->
+  <section class="panel-view" data-panel="printers">
+    <div class="view-toolbar">
+      <div>
+        <h2>Tus impresoras</h2>
+        <p>FDM y resina, con foto, especificaciones y el dato que alimenta la calculadora (potencia, valor, vida útil).</p>
+      </div>
+      <button class="btn btn-primary" id="btn-add-printer">+ Nueva impresora</button>
+    </div>
+    <div id="printersEmpty" class="empty-state" hidden>
+      <strong>Todavía no agregas impresoras</strong>
+      Registra tu primera impresora para verla aquí y usarla directo en la calculadora.
+    </div>
+    <div id="printersGrid" class="card-grid"></div>
+  </section>
+
+  <!-- ===== MATERIALES ===== -->
+  <section class="panel-view" data-panel="materials">
+    <div class="view-toolbar">
+      <div>
+        <h2>Filamento y resina</h2>
+        <p>Tu stock de materiales, con color, marca y precio — selecciónalos directo desde la calculadora.</p>
+      </div>
+      <button class="btn btn-primary" id="btn-add-material">+ Nuevo material</button>
+    </div>
+    <div id="materialsEmpty" class="empty-state" hidden>
+      <strong>Todavía no agregas materiales</strong>
+      Registra tus rollos de filamento o botellas de resina para llevar el stock.
+    </div>
+    <div id="materialsList" class="list-rows"></div>
+  </section>
+
+  <!-- ===== HERRAMIENTAS ===== -->
+  <section class="panel-view" data-panel="tools">
+    <div class="view-toolbar">
+      <div>
+        <h2>Herramientas y accesorios</h2>
+        <p>Espátulas, boquillas de repuesto, guantes de nitrilo, lijas — lo que usas junto a la impresora.</p>
+      </div>
+      <button class="btn btn-primary" id="btn-add-tool">+ Nueva herramienta</button>
+    </div>
+    <div id="toolsEmpty" class="empty-state" hidden>
+      <strong>Todavía no agregas herramientas</strong>
+      Registra tus herramientas y accesorios para saber qué tienes y cuánto.
+    </div>
+    <div id="toolsListRows" class="list-rows"></div>
+  </section>
+
+  <!-- ===== COTIZACIONES ===== -->
+  <section class="panel-view" data-panel="quotes">
+    <div class="view-toolbar">
+      <div>
+        <h2>Cotizaciones guardadas</h2>
+        <p>Cada vez que guardas una cotización desde la calculadora, queda aquí como historial de precios ya calculados.</p>
+      </div>
+    </div>
+    <div id="quotesEmpty" class="empty-state" hidden>
+      <strong>Todavía no guardas cotizaciones</strong>
+      Ve a la Calculadora, ajusta los valores y presiona "Guardar cotización".
+    </div>
+    <div id="quotesList" class="list-rows"></div>
+  </section>
+
+  <p class="page-footer">
+    Herramienta de referencia. Verifica siempre tu tarifa eléctrica real y ajusta los porcentajes a tu caso. No constituye asesoría tributaria. Tus datos se guardan solo en este navegador — usa "Exportar datos" para respaldarlos o pasarlos a otro computador.
+  </p>
+</div>
+
+<!-- ===== DIALOG: PRINTER ===== -->
+<dialog id="printerDialog">
+  <form class="dialog-inner" id="printerForm">
+    <h2 id="printerDialogTitle">Nueva impresora</h2>
+    <label>
+      Nombre
+      <input type="text" id="pName" placeholder="Ej: Ender 3 V2" required>
+    </label>
+    <div class="row">
+      <label>
+        Marca / modelo
+        <input type="text" id="pBrand" placeholder="Ej: Creality Ender 3 V2">
+      </label>
+      <label>
+        Tipo
+        <select id="pType">
+          <option value="fdm">FDM (filamento)</option>
+          <option value="resin">Resina (SLA/DLP)</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label>
+        Potencia (W)
+        <input type="number" id="pPower" min="0" step="10" value="200">
+      </label>
+      <label>
+        Valor de compra (CLP)
+        <input type="number" id="pCost" min="0" step="1000" value="350000">
+      </label>
+    </div>
+    <div class="row">
+      <label>
+        Vida útil estimada (horas)
+        <input type="number" id="pLifespan" min="0" step="100" value="5000">
+      </label>
+      <label>
+        Fecha de compra (opcional)
+        <input type="date" id="pDate">
+      </label>
+    </div>
+    <label>
+      Notas
+      <textarea id="pNotes" placeholder="Modificaciones, estado, etc."></textarea>
+    </label>
+    <label>
+      Foto de la impresora
+      <div class="image-field">
+        <div class="image-preview" id="pImagePreview">sin foto</div>
+        <input type="file" id="pImageInput" accept="image/*">
+      </div>
+      <small>La foto se guarda comprimida en este navegador (no sube a ningún servidor).</small>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="printerCancel">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ===== DIALOG: MATERIAL ===== -->
+<dialog id="materialDialog">
+  <form class="dialog-inner" id="materialForm">
+    <h2 id="materialDialogTitle">Nuevo material</h2>
+    <div class="row">
+      <label>
+        Tipo
+        <select id="mType">
+          <option value="filamento">Filamento</option>
+          <option value="resina">Resina</option>
+        </select>
+      </label>
+      <label>
+        Material
+        <input type="text" id="mMaterial" placeholder="Ej: PLA, PETG, ABS, Resina estándar" required>
+      </label>
+    </div>
+    <div class="row">
+      <label>
+        Color
+        <input type="text" id="mColorName" placeholder="Ej: Rojo transparente">
+      </label>
+      <label>
+        Muestra de color
+        <input type="color" id="mColorSwatch" value="#e15b17">
+      </label>
+    </div>
+    <label>
+      Marca
+      <input type="text" id="mBrand" placeholder="Ej: 3DFila, Kupra, WSD">
+    </label>
+    <div class="row">
+      <label>
+        <span id="mStockLabel">Stock (g)</span>
+        <input type="number" id="mStock" min="0" step="1" value="1000">
+      </label>
+      <label>
+        <span id="mPriceLabel">Precio (CLP/kg)</span>
+        <input type="number" id="mPrice" min="0" step="100" value="12000">
+      </label>
+    </div>
+    <label>
+      Notas
+      <textarea id="mNotes" placeholder="Temperatura de impresión, proveedor, etc."></textarea>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="materialCancel">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ===== DIALOG: TOOL ===== -->
+<dialog id="toolDialog">
+  <form class="dialog-inner" id="toolForm">
+    <h2 id="toolDialogTitle">Nueva herramienta</h2>
+    <label>
+      Nombre
+      <input type="text" id="tName" placeholder="Ej: Espátula metálica" required>
+    </label>
+    <div class="row">
+      <label>
+        Categoría
+        <select id="tCategory">
+          <option value="herramienta">Herramienta</option>
+          <option value="accesorio">Accesorio</option>
+          <option value="repuesto">Repuesto</option>
+        </select>
+      </label>
+      <label>
+        Cantidad
+        <input type="number" id="tQuantity" min="0" step="1" value="1">
+      </label>
+    </div>
+    <label>
+      Notas
+      <textarea id="tNotes" placeholder="Dónde la guardas, estado, etc."></textarea>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="toolCancel">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ===== DIALOG: SAVE QUOTE ===== -->
+<dialog id="quoteDialog">
+  <form class="dialog-inner" id="quoteForm">
+    <h2>Guardar cotización</h2>
+    <label>
+      Nombre de la cotización
+      <input type="text" id="qName" placeholder="Ej: 3x Soporte celular para Juan" required>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="quoteCancel">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ===== DIALOG: DATA BACKUP ===== -->
+<dialog id="dataDialog">
+  <div class="dialog-inner">
+    <h2>Copia de seguridad</h2>
+    <p class="inline-note">Tus impresoras, materiales, herramientas y cotizaciones se guardan solo en este navegador. Exporta un archivo para respaldarlos o pasarlos a otro computador.</p>
+    <div class="actions">
+      <button type="button" class="btn btn-primary" id="btn-export-data">Exportar datos (.json)</button>
+      <button type="button" class="btn" id="btn-import-data">Importar datos</button>
+      <input type="file" id="importFileInput" accept="application/json" hidden>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn btn-danger-ghost" id="btn-clear-data">Borrar todos los datos de este navegador</button>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="dataDialogClose">Cerrar</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ===== PRINT SHEET (visible only when printing) ===== -->
+<div id="printSheet" class="print-sheet"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
