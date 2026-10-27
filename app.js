@@ -19,6 +19,7 @@
     materials: "taller3d_materials",
     tools: "taller3d_tools",
     quotes: "taller3d_quotes",
+    jobs: "taller3d_jobs",
     theme: "taller3d_theme",
   };
 
@@ -47,6 +48,18 @@
   let materials = loadArr(STORE_KEYS.materials);
   let toolsItems = loadArr(STORE_KEYS.tools);
   let quotes = loadArr(STORE_KEYS.quotes);
+  let jobs = loadArr(STORE_KEYS.jobs);
+
+  function formatHours(h) {
+    const n = Number.isFinite(h) ? h : 0;
+    return (Math.round(n * 10) / 10).toLocaleString("es-CL") + " h";
+  }
+
+  function statusForRatio(ratio) {
+    if (ratio >= 1) return "critical";
+    if (ratio >= 0.7) return "warning";
+    return "good";
+  }
 
   // ---------- Theme ----------
   const themeToggleBtn = document.getElementById("btn-theme-toggle");
@@ -214,12 +227,18 @@
     calculate();
   });
 
+  function updateLogJobHint() {
+    const ready = Boolean(calcPrinterSelect.value) && Boolean(calcMaterialSelect.value);
+    document.getElementById("logJobHint").hidden = ready;
+  }
+
   // ---------- Quick-fill from inventory ----------
   const calcPrinterSelect = document.getElementById("calcPrinterSelect");
   const calcMaterialSelect = document.getElementById("calcMaterialSelect");
 
   calcPrinterSelect.addEventListener("change", () => {
     const p = printers.find((x) => x.id === calcPrinterSelect.value);
+    updateLogJobHint();
     if (!p) return;
     if (p.power_w != null) document.getElementById("printerPower").value = p.power_w;
     if (p.cost_clp != null) document.getElementById("printerCost").value = p.cost_clp;
@@ -229,6 +248,7 @@
 
   calcMaterialSelect.addEventListener("change", () => {
     const m = materials.find((x) => x.id === calcMaterialSelect.value);
+    updateLogJobHint();
     if (!m) return;
     document.getElementById("materialType").value = m.type === "resina" ? "resina" : "filamento";
     applyMaterialType();
@@ -250,6 +270,8 @@
     calcMaterialSelect.innerHTML = '<option value="">— Ninguno —</option>' +
       materials.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(materialLabel(m))}</option>`).join("");
     if (materials.some((m) => m.id === prevMaterial)) calcMaterialSelect.value = prevMaterial;
+
+    updateLogJobHint();
   }
 
   // ---------- Image compression (client-side, no server) ----------
@@ -283,9 +305,15 @@
   let editingPrinterId = null;
   let pendingPrinterImage = null;
 
+  const MAINTENANCE_LABELS = { good: "Al día", warning: "Pronto", critical: "Atrasada" };
+
   function renderPrinters() {
     printersEmpty.hidden = printers.length > 0;
-    printersGrid.innerHTML = printers.map((p) => `
+    printersGrid.innerHTML = printers.map((p) => {
+      const interval = Math.max(p.maintenanceIntervalHours || 1, 1);
+      const sinceMaint = p.hoursSinceMaintenance || 0;
+      const mStatus = statusForRatio(sinceMaint / interval);
+      return `
       <article class="card" data-id="${escapeHtml(p.id)}">
         <div class="card-media">
           ${p.image ? `<img src="${p.image}" alt="${escapeHtml(p.name || "")}">` : "sin foto"}
@@ -298,19 +326,25 @@
             <li>Potencia: <strong>${p.power_w ?? "—"} W</strong></li>
             <li>Valor: <strong>${p.cost_clp != null ? clpUnit(p.cost_clp) : "—"}</strong></li>
             <li>Vida útil: <strong>${p.lifespan_hours ?? "—"} h</strong></li>
+            <li>Horas usadas: <strong>${formatHours(p.totalHours || 0)}</strong></li>
           </ul>
+          <span class="status-chip status-${mStatus}">Mantención: ${MAINTENANCE_LABELS[mStatus]}</span>
           <div class="card-actions">
             <button class="btn btn-icon" data-action="edit-printer" data-id="${escapeHtml(p.id)}">Editar</button>
+            <button class="btn btn-icon" data-action="maintain-printer" data-id="${escapeHtml(p.id)}">Registrar mantención</button>
             <button class="btn btn-icon btn-danger-ghost" data-action="delete-printer" data-id="${escapeHtml(p.id)}">Eliminar</button>
           </div>
         </div>
       </article>
-    `).join("");
+    `;
+    }).join("");
   }
 
   function renderImagePreview(elId, dataUrl) {
     document.getElementById(elId).innerHTML = dataUrl ? `<img src="${dataUrl}" alt="">` : "sin foto";
   }
+
+  const DEFAULT_MAINTENANCE_INTERVAL = { fdm: 200, resin: 100 };
 
   function openPrinterDialog(printer) {
     editingPrinterId = printer ? printer.id : null;
@@ -323,6 +357,9 @@
     document.getElementById("pCost").value = printer?.cost_clp ?? 350000;
     document.getElementById("pLifespan").value = printer?.lifespan_hours ?? 5000;
     document.getElementById("pDate").value = printer?.purchaseDate || "";
+    document.getElementById("pTotalHours").value = printer?.totalHours ?? 0;
+    document.getElementById("pMaintenanceInterval").value =
+      printer?.maintenanceIntervalHours ?? DEFAULT_MAINTENANCE_INTERVAL[printer?.type || "fdm"];
     document.getElementById("pNotes").value = printer?.notes || "";
     document.getElementById("pImageInput").value = "";
     renderImagePreview("pImagePreview", pendingPrinterImage);
@@ -331,6 +368,11 @@
 
   document.getElementById("btn-add-printer").addEventListener("click", () => openPrinterDialog(null));
   document.getElementById("printerCancel").addEventListener("click", () => printerDialog.close());
+
+  document.getElementById("pType").addEventListener("change", (e) => {
+    if (editingPrinterId) return;
+    document.getElementById("pMaintenanceInterval").value = DEFAULT_MAINTENANCE_INTERVAL[e.target.value] ?? 200;
+  });
 
   document.getElementById("pImageInput").addEventListener("change", async (e) => {
     const file = e.target.files[0];
@@ -346,6 +388,7 @@
 
   printerForm.addEventListener("submit", (e) => {
     e.preventDefault();
+    const existing = editingPrinterId ? printers.find((x) => x.id === editingPrinterId) : null;
     const data = {
       id: editingPrinterId || genId(),
       name: document.getElementById("pName").value.trim(),
@@ -355,6 +398,10 @@
       cost_clp: num("pCost"),
       lifespan_hours: num("pLifespan"),
       purchaseDate: document.getElementById("pDate").value || null,
+      totalHours: num("pTotalHours"),
+      maintenanceIntervalHours: Math.max(num("pMaintenanceInterval"), 1),
+      hoursSinceMaintenance: existing?.hoursSinceMaintenance || 0,
+      lastMaintenanceAt: existing?.lastMaintenanceAt || null,
       notes: document.getElementById("pNotes").value.trim(),
       image: pendingPrinterImage || null,
     };
@@ -366,6 +413,7 @@
     if (saveArr(STORE_KEYS.printers, printers)) {
       renderPrinters();
       refreshCalcSelects();
+      renderDashboard();
       printerDialog.close();
     }
   });
@@ -373,15 +421,25 @@
   printersGrid.addEventListener("click", (e) => {
     const editBtn = e.target.closest('[data-action="edit-printer"]');
     const delBtn = e.target.closest('[data-action="delete-printer"]');
+    const maintainBtn = e.target.closest('[data-action="maintain-printer"]');
     if (editBtn) {
       const p = printers.find((x) => x.id === editBtn.dataset.id);
       if (p) openPrinterDialog(p);
+    }
+    if (maintainBtn && confirm("¿Registrar que acabas de hacer mantención a esta impresora? Esto pone en cero las horas acumuladas desde la última mantención.")) {
+      printers = printers.map((p) =>
+        p.id === maintainBtn.dataset.id ? { ...p, hoursSinceMaintenance: 0, lastMaintenanceAt: new Date().toISOString() } : p
+      );
+      saveArr(STORE_KEYS.printers, printers);
+      renderPrinters();
+      renderDashboard();
     }
     if (delBtn && confirm("¿Eliminar esta impresora de tu inventario?")) {
       printers = printers.filter((x) => x.id !== delBtn.dataset.id);
       saveArr(STORE_KEYS.printers, printers);
       renderPrinters();
       refreshCalcSelects();
+      renderDashboard();
     }
   });
 
@@ -459,6 +517,7 @@
     if (saveArr(STORE_KEYS.materials, materials)) {
       renderMaterials();
       refreshCalcSelects();
+      renderDashboard();
       materialDialog.close();
     }
   });
@@ -475,6 +534,7 @@
       saveArr(STORE_KEYS.materials, materials);
       renderMaterials();
       refreshCalcSelects();
+      renderDashboard();
     }
   });
 
@@ -613,6 +673,207 @@
     }
   });
 
+  // ---------- Jobs (historial de trabajos realizados) + Dashboard ----------
+  const jobDialog = document.getElementById("jobDialog");
+  const jobForm = document.getElementById("jobForm");
+  const btnLogJob = document.getElementById("btn-log-job");
+
+  const MAINTENANCE_NOTES = {
+    fdm: "Revisión general sugerida: lubricar ejes y varillas, tensar correas, limpiar nozzle y raíles, verificar nivelación de la cama.",
+    resin: "Revisión general sugerida: cambiar o limpiar el FEP/film de la cubeta, limpiar la pantalla LCD/MSLA, filtrar o reponer resina, verificar nivelación.",
+  };
+
+  btnLogJob.addEventListener("click", () => {
+    const printer = printers.find((p) => p.id === calcPrinterSelect.value);
+    const material = materials.find((m) => m.id === calcMaterialSelect.value);
+    if (!printer || !material || !currentCalc) {
+      alert("Elige primero una impresora y un material guardados en la calculadora (arriba, en \"Usar impresora/material guardado\").");
+      return;
+    }
+    const unit = currentCalc.result.isResin ? "ml" : "g";
+    document.getElementById("jobDialogSummary").textContent =
+      `${printer.name} · ${materialLabel(material)} · ${currentCalc.inputs.filamentWeight} ${unit} · ${currentCalc.result.printHours.toFixed(1)} h`;
+    document.getElementById("jName").value = currentCalc.inputs.projectName || "";
+    document.getElementById("jDate").value = new Date().toISOString().slice(0, 10);
+    document.getElementById("jNotes").value = "";
+    jobDialog.showModal();
+  });
+  document.getElementById("jobCancel").addEventListener("click", () => jobDialog.close());
+
+  jobForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const printer = printers.find((p) => p.id === calcPrinterSelect.value);
+    const material = materials.find((m) => m.id === calcMaterialSelect.value);
+    if (!printer || !material || !currentCalc) { jobDialog.close(); return; }
+
+    const weightUsed = parseFloat(currentCalc.inputs.filamentWeight) || 0;
+    const printHours = currentCalc.result.printHours;
+
+    const job = {
+      id: genId(),
+      name: document.getElementById("jName").value.trim() || "Trabajo sin nombre",
+      date: document.getElementById("jDate").value || new Date().toISOString().slice(0, 10),
+      createdAt: new Date().toISOString(),
+      notes: document.getElementById("jNotes").value.trim(),
+      printerId: printer.id,
+      printerName: printer.name,
+      materialId: material.id,
+      materialName: materialLabel(material),
+      materialType: material.type,
+      materialColorSwatch: material.colorSwatch,
+      weightUsed,
+      printHours,
+      totalCost: currentCalc.result.totalCost,
+      suggestedPrice: currentCalc.result.suggestedPrice,
+      netProfit: currentCalc.result.netProfit,
+    };
+    jobs.push(job);
+
+    printers = printers.map((p) => p.id === printer.id
+      ? { ...p, totalHours: (p.totalHours || 0) + printHours, hoursSinceMaintenance: (p.hoursSinceMaintenance || 0) + printHours }
+      : p);
+    materials = materials.map((m) => m.id === material.id
+      ? { ...m, stock: Math.max(0, (m.stock || 0) - weightUsed) }
+      : m);
+
+    saveArr(STORE_KEYS.jobs, jobs);
+    saveArr(STORE_KEYS.printers, printers);
+    saveArr(STORE_KEYS.materials, materials);
+    renderPrinters();
+    renderMaterials();
+    refreshCalcSelects();
+    renderDashboard();
+    jobDialog.close();
+    goToTab("dashboard");
+  });
+
+  function undoJobEffects(job) {
+    printers = printers.map((p) => p.id === job.printerId
+      ? { ...p, totalHours: Math.max(0, (p.totalHours || 0) - job.printHours), hoursSinceMaintenance: Math.max(0, (p.hoursSinceMaintenance || 0) - job.printHours) }
+      : p);
+    materials = materials.map((m) => m.id === job.materialId
+      ? { ...m, stock: (m.stock || 0) + job.weightUsed }
+      : m);
+    saveArr(STORE_KEYS.printers, printers);
+    saveArr(STORE_KEYS.materials, materials);
+  }
+
+  const jobsHistoryList = document.getElementById("jobsHistoryList");
+  jobsHistoryList.addEventListener("click", (e) => {
+    const delBtn = e.target.closest('[data-action="delete-job"]');
+    if (!delBtn) return;
+    const job = jobs.find((j) => j.id === delBtn.dataset.id);
+    if (!job) return;
+    if (!confirm("¿Eliminar este trabajo del historial? Esto también devuelve el stock de material y resta las horas a la impresora.")) return;
+    undoJobEffects(job);
+    jobs = jobs.filter((j) => j.id !== job.id);
+    saveArr(STORE_KEYS.jobs, jobs);
+    renderPrinters();
+    renderMaterials();
+    refreshCalcSelects();
+    renderDashboard();
+  });
+
+  function renderDashboard() {
+    const dashboardEmpty = document.getElementById("dashboardEmpty");
+    const dashboardContent = document.getElementById("dashboardContent");
+    dashboardEmpty.hidden = jobs.length > 0;
+    dashboardContent.hidden = jobs.length === 0;
+    if (jobs.length === 0) return;
+
+    const totalHours = jobs.reduce((sum, j) => sum + j.printHours, 0);
+    const totalRevenue = jobs.reduce((sum, j) => sum + j.suggestedPrice, 0);
+    const totalProfit = jobs.reduce((sum, j) => sum + j.netProfit, 0);
+    document.getElementById("statJobCount").textContent = jobs.length.toLocaleString("es-CL");
+    document.getElementById("statTotalHours").textContent = formatHours(totalHours);
+    document.getElementById("statTotalRevenue").textContent = clpUnit(totalRevenue);
+    document.getElementById("statTotalProfit").textContent = clpUnit(totalProfit);
+
+    // Material ranking
+    const byMaterial = new Map();
+    jobs.forEach((j) => {
+      const key = j.materialId || j.materialName;
+      const entry = byMaterial.get(key) || { name: j.materialName, swatch: j.materialColorSwatch, unit: j.materialType === "resina" ? "ml" : "g", total: 0 };
+      entry.total += j.weightUsed;
+      byMaterial.set(key, entry);
+    });
+    const ranked = [...byMaterial.values()].sort((a, b) => b.total - a.total).slice(0, 8);
+    const maxTotal = ranked.length ? ranked[0].total : 1;
+    const materialRanking = document.getElementById("materialRanking");
+    materialRanking.innerHTML = ranked.map((entry) => `
+      <div class="rank-row">
+        <div class="rank-label">
+          <span class="rank-swatch" style="background:${escapeHtml(entry.swatch || "#cccccc")}"></span>
+          <span>${escapeHtml(entry.name)}</span>
+        </div>
+        <div class="rank-track"><div class="rank-fill" style="width:${maxTotal > 0 ? (entry.total / maxTotal) * 100 : 0}%"></div></div>
+        <div class="rank-value">${Math.round(entry.total).toLocaleString("es-CL")} ${entry.unit}</div>
+      </div>
+    `).join("");
+
+    // Printer usage + maintenance
+    const printerUsageList = document.getElementById("printerUsageList");
+    printerUsageList.innerHTML = printers.map((p) => {
+      const lifespan = Math.max(p.lifespan_hours || 1, 1);
+      const interval = Math.max(p.maintenanceIntervalHours || 1, 1);
+      const totalH = p.totalHours || 0;
+      const sinceMaint = p.hoursSinceMaintenance || 0;
+      const lifeRatio = Math.min(totalH / lifespan, 1);
+      const maintRatio = Math.min(sinceMaint / interval, 1);
+      const lifeStatus = statusForRatio(totalH / lifespan);
+      const maintStatus = statusForRatio(sinceMaint / interval);
+      return `
+        <div class="usage-card" data-id="${escapeHtml(p.id)}">
+          <div class="usage-card-head">
+            <h4>${escapeHtml(p.name || "Sin nombre")} <span class="badge ${p.type === "resin" ? "badge-resin" : "badge-fdm"}">${p.type === "resin" ? "Resina" : "FDM"}</span></h4>
+            <span class="status-chip status-${maintStatus}">Mantención: ${MAINTENANCE_LABELS[maintStatus]}</span>
+          </div>
+          <div class="usage-meter">
+            <div class="usage-meter-label"><span>Horas usadas vs. vida útil</span><strong>${formatHours(totalH)} / ${formatHours(lifespan)}</strong></div>
+            <div class="usage-meter-track"><div class="usage-meter-fill status-${lifeStatus}" style="width:${lifeRatio * 100}%"></div></div>
+          </div>
+          <div class="usage-meter">
+            <div class="usage-meter-label"><span>Desde la última mantención</span><strong>${formatHours(sinceMaint)} / ${formatHours(interval)}</strong></div>
+            <div class="usage-meter-track"><div class="usage-meter-fill status-${maintStatus}" style="width:${maintRatio * 100}%"></div></div>
+          </div>
+          <p class="maintenance-note">${MAINTENANCE_NOTES[p.type] || MAINTENANCE_NOTES.fdm}</p>
+          <div class="card-actions">
+            <button class="btn btn-icon" data-action="maintain-printer" data-id="${escapeHtml(p.id)}">Registrar mantención</button>
+          </div>
+        </div>
+      `;
+    }).join("") || '<p class="inline-note">Agrega impresoras en la pestaña "Impresoras" para ver su uso aquí.</p>';
+
+    // Jobs history
+    jobsHistoryList.innerHTML = jobs.slice().reverse().map((j) => `
+      <div class="list-row" data-id="${escapeHtml(j.id)}">
+        <div class="info">
+          <h3>${escapeHtml(j.name)}</h3>
+          <div class="meta">${new Date(j.date).toLocaleDateString("es-CL")} · ${escapeHtml(j.printerName)} · ${escapeHtml(j.materialName)} · ${formatHours(j.printHours)}</div>
+        </div>
+        <div class="quote-summary">
+          Costo: <strong>${clpUnit(j.totalCost)}</strong><br>
+          Venta: <strong>${clpUnit(j.suggestedPrice)}</strong>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-icon btn-danger-ghost" data-action="delete-job" data-id="${escapeHtml(j.id)}">Eliminar</button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  document.getElementById("printerUsageList").addEventListener("click", (e) => {
+    const maintainBtn = e.target.closest('[data-action="maintain-printer"]');
+    if (!maintainBtn) return;
+    if (!confirm("¿Registrar que acabas de hacer mantención a esta impresora? Esto pone en cero las horas acumuladas desde la última mantención.")) return;
+    printers = printers.map((p) =>
+      p.id === maintainBtn.dataset.id ? { ...p, hoursSinceMaintenance: 0, lastMaintenanceAt: new Date().toISOString() } : p
+    );
+    saveArr(STORE_KEYS.printers, printers);
+    renderPrinters();
+    renderDashboard();
+  });
+
   // ---------- Print a client-facing quote ----------
   const printSheet = document.getElementById("printSheet");
 
@@ -658,7 +919,7 @@
       exportedAt: new Date().toISOString(),
       app: "Taller3D",
       version: 1,
-      printers, materials, tools: toolsItems, quotes,
+      printers, materials, tools: toolsItems, quotes, jobs,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -681,19 +942,22 @@
     reader.onload = () => {
       try {
         const payload = JSON.parse(reader.result);
-        if (!confirm("Esto reemplazará tus impresoras, materiales, herramientas y cotizaciones actuales en este navegador por los del archivo. ¿Continuar?")) return;
+        if (!confirm("Esto reemplazará tus impresoras, materiales, herramientas, cotizaciones y el historial de trabajos actuales en este navegador por los del archivo. ¿Continuar?")) return;
         printers = Array.isArray(payload.printers) ? payload.printers : [];
         materials = Array.isArray(payload.materials) ? payload.materials : [];
         toolsItems = Array.isArray(payload.tools) ? payload.tools : [];
         quotes = Array.isArray(payload.quotes) ? payload.quotes : [];
+        jobs = Array.isArray(payload.jobs) ? payload.jobs : [];
         saveArr(STORE_KEYS.printers, printers);
         saveArr(STORE_KEYS.materials, materials);
         saveArr(STORE_KEYS.tools, toolsItems);
         saveArr(STORE_KEYS.quotes, quotes);
+        saveArr(STORE_KEYS.jobs, jobs);
         renderPrinters();
         renderMaterials();
         renderTools();
         renderQuotes();
+        renderDashboard();
         refreshCalcSelects();
         dataDialog.close();
         alert("Datos importados correctamente.");
@@ -707,16 +971,18 @@
   });
 
   document.getElementById("btn-clear-data").addEventListener("click", () => {
-    if (!confirm("Esto borra impresoras, materiales, herramientas y cotizaciones de este navegador, sin poder deshacerlo. ¿Continuar?")) return;
-    printers = []; materials = []; toolsItems = []; quotes = [];
+    if (!confirm("Esto borra impresoras, materiales, herramientas, cotizaciones y el historial de trabajos de este navegador, sin poder deshacerlo. ¿Continuar?")) return;
+    printers = []; materials = []; toolsItems = []; quotes = []; jobs = [];
     saveArr(STORE_KEYS.printers, printers);
     saveArr(STORE_KEYS.materials, materials);
     saveArr(STORE_KEYS.tools, toolsItems);
     saveArr(STORE_KEYS.quotes, quotes);
+    saveArr(STORE_KEYS.jobs, jobs);
     renderPrinters();
     renderMaterials();
     renderTools();
     renderQuotes();
+    renderDashboard();
     refreshCalcSelects();
     dataDialog.close();
   });
@@ -729,4 +995,5 @@
   renderTools();
   renderQuotes();
   refreshCalcSelects();
+  renderDashboard();
 })();
