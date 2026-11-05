@@ -12,6 +12,9 @@ de obra como factores explícitos.
 Abre `index.html` en el navegador, o publícala como sitio estático
 (GitHub Pages, Netlify, Vercel, etc.). No requiere servidor ni build.
 
+¿Primera vez usándola? Mira la **[guía de uso paso a paso](guia/index.html)**,
+con capturas reales de cada pantalla.
+
 ## Secciones
 
 - **Calculadora**: material (filamento o resina), tiempo de impresión,
@@ -20,11 +23,19 @@ Abre `index.html` en el navegador, o publícala como sitio estático
   venta. Muestra el desglose completo, el precio sugerido, la ganancia
   neta, el precio por gramo/ml y la **ganancia por hora de impresora**
   (para comparar qué proyectos realmente conviene imprimir).
+- **Dashboard**: estadísticas generales (trabajos, horas, ingresos y
+  ganancia totales), ranking de filamento/resina más usados, horas por
+  impresora frente a su vida útil con semáforo de mantención (al día /
+  pronto / atrasada), e historial completo de trabajos registrados.
 - **Impresoras**: FDM o resina, con foto, marca/modelo, potencia, valor
-  de compra y vida útil estimada — estos tres últimos alimentan
-  directamente la calculadora.
+  de compra, vida útil estimada e intervalo de mantención — estos datos
+  alimentan directamente la calculadora y el Dashboard. Se pueden
+  agregar escribiendo los datos a mano o eligiendo un modelo desde el
+  **catálogo de impresoras del mercado** (Creality, Prusa, Bambu Lab,
+  Anycubic, Elegoo), que precarga tipo y potencia de referencia.
 - **Filamento y resina**: stock por color y marca, con precio por kg o
-  por litro según el tipo.
+  por litro según el tipo. Se descuenta solo al registrar un trabajo
+  realizado.
 - **Herramientas y accesorios**: lo que usas junto a la impresora
   (espátulas, boquillas de repuesto, guantes, etc.).
 - **Cotizaciones**: guarda cualquier cálculo con un nombre, para llevar
@@ -32,6 +43,10 @@ Abre `index.html` en el navegador, o publícala como sitio estático
   cargarlo en la calculadora o generar una **cotización imprimible**
   (hoja limpia en PDF/papel, pensada para mostrarle al cliente) con el
   botón "Imprimir" o "Cotización para cliente".
+- **Registrar trabajo realizado**: cuando una impresión fue real (no
+  solo un cálculo), este botón en la calculadora descuenta el material
+  usado del stock y suma las horas a la impresora elegida — así el
+  Dashboard refleja uso real, no solo cotizaciones.
 
 ## Cómo guarda tus datos
 
