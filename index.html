@@ -287,7 +287,10 @@
         <h2>Tus impresoras</h2>
         <p>FDM y resina, con foto, especificaciones y el dato que alimenta la calculadora (potencia, valor, vida útil).</p>
       </div>
-      <button class="btn btn-primary" id="btn-add-printer">+ Nueva impresora</button>
+      <div class="toolbar-btn-group">
+        <button class="btn" id="btn-open-catalog">Elegir del catálogo</button>
+        <button class="btn btn-primary" id="btn-add-printer">+ Nueva impresora</button>
+      </div>
     </div>
     <div id="printersEmpty" class="empty-state" hidden>
       <strong>Todavía no agregas impresoras</strong>
@@ -417,6 +420,18 @@
       <button type="submit" class="btn btn-primary">Guardar</button>
     </div>
   </form>
+</dialog>
+
+<!-- ===== DIALOG: PRINTER CATALOG ===== -->
+<dialog id="catalogDialog">
+  <div class="dialog-inner catalog-dialog-inner">
+    <h2>Catálogo de impresoras</h2>
+    <p class="inline-note">Modelos de referencia del mercado. Elige uno para precargar tipo y potencia — luego ajusta el valor de compra y guarda. Los íconos son ilustrativos (no fotos del fabricante); puedes agregar tu propia foto real después de guardar.</p>
+    <div id="catalogGrid" class="card-grid catalog-grid"></div>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="catalogClose">Cerrar</button>
+    </div>
+  </div>
 </dialog>
 
 <!-- ===== DIALOG: MATERIAL ===== -->

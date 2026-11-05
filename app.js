@@ -369,6 +369,84 @@
   document.getElementById("btn-add-printer").addEventListener("click", () => openPrinterDialog(null));
   document.getElementById("printerCancel").addEventListener("click", () => printerDialog.close());
 
+  // ---------- Printer catalog (reference models, illustrated icons) ----------
+  const ICON_FDM = `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M10 10 L10 50 M54 10 L54 50"/>
+    <path d="M10 10 L54 10"/>
+    <path d="M10 50 L54 50"/>
+    <circle cx="32" cy="18" r="2" fill="currentColor" stroke="none"/>
+    <path d="M32 18 L32 26"/>
+    <path d="M24 44 L40 44 L36 30 L28 30 Z"/>
+    <path d="M27 38 L37 38 M28.5 34 L35.5 34"/>
+  </svg>`;
+  const ICON_RESIN = `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M16 12 L16 50"/>
+    <path d="M16 12 L32 12"/>
+    <rect x="24" y="26" width="16" height="6" rx="1"/>
+    <path d="M20 34 L44 34 L40 50 L24 50 Z"/>
+    <path d="M20 34 Q 32 38 44 34" stroke-dasharray="1 5"/>
+    <path d="M26 56 L30 50 M32 56 L32 50 M38 56 L34 50"/>
+  </svg>`;
+
+  const PRINTER_CATALOG = [
+    { name: "Ender 3 V3 SE", brand: "Creality", type: "fdm", power_w: 350, note: "220×220×250 mm · gama de entrada muy popular" },
+    { name: "Ender 3 V2", brand: "Creality", type: "fdm", power_w: 350, note: "220×220×250 mm · clásica, mucha comunidad" },
+    { name: "K1", brand: "Creality", type: "fdm", power_w: 500, note: "CoreXY cerrada · impresión rápida" },
+    { name: "MK4", brand: "Prusa", type: "fdm", power_w: 240, note: "Código abierto · muy confiable" },
+    { name: "A1 mini", brand: "Bambu Lab", type: "fdm", power_w: 200, note: "Compacta · multicolor con AMS opcional" },
+    { name: "P1S", brand: "Bambu Lab", type: "fdm", power_w: 500, note: "Cerrada · muy rápida" },
+    { name: "Kobra 2", brand: "Anycubic", type: "fdm", power_w: 350, note: "Rápida y económica" },
+    { name: "Neptune 4", brand: "Elegoo", type: "fdm", power_w: 350, note: "Rápida y económica" },
+    { name: "Mars 5", brand: "Elegoo", type: "resin", power_w: 65, note: "MSLA · alta resolución" },
+    { name: "Photon Mono M5s", brand: "Anycubic", type: "resin", power_w: 80, note: "MSLA · pantalla grande" },
+    { name: "Saturn 4", brand: "Elegoo", type: "resin", power_w: 120, note: "MSLA · formato grande" },
+  ];
+
+  const catalogDialog = document.getElementById("catalogDialog");
+  const catalogGrid = document.getElementById("catalogGrid");
+
+  function renderCatalog() {
+    catalogGrid.innerHTML = PRINTER_CATALOG.map((c, i) => `
+      <article class="card" data-index="${i}">
+        <div class="catalog-card-media">
+          <span class="${c.type === "resin" ? "catalog-icon-resin" : "catalog-icon-fdm"}">${c.type === "resin" ? ICON_RESIN : ICON_FDM}</span>
+        </div>
+        <div class="card-body">
+          <h3>${escapeHtml(c.name)}</h3>
+          <span class="badge ${c.type === "resin" ? "badge-resin" : "badge-fdm"}">${c.type === "resin" ? "Resina" : "FDM"}</span>
+          <div class="meta">${escapeHtml(c.brand)}</div>
+          <ul class="specs">
+            <li>Potencia ref.: <strong>${c.power_w} W</strong></li>
+          </ul>
+          <div class="meta">${escapeHtml(c.note)}</div>
+          <div class="card-actions">
+            <button type="button" class="btn btn-primary" data-action="use-catalog-model" data-index="${i}">Usar este modelo</button>
+          </div>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  document.getElementById("btn-open-catalog").addEventListener("click", () => {
+    renderCatalog();
+    catalogDialog.showModal();
+  });
+  document.getElementById("catalogClose").addEventListener("click", () => catalogDialog.close());
+
+  catalogGrid.addEventListener("click", (e) => {
+    const useBtn = e.target.closest('[data-action="use-catalog-model"]');
+    if (!useBtn) return;
+    const entry = PRINTER_CATALOG[Number(useBtn.dataset.index)];
+    if (!entry) return;
+    catalogDialog.close();
+    openPrinterDialog(null);
+    document.getElementById("pName").value = entry.name;
+    document.getElementById("pBrand").value = entry.brand;
+    document.getElementById("pType").value = entry.type;
+    document.getElementById("pPower").value = entry.power_w;
+    document.getElementById("pMaintenanceInterval").value = DEFAULT_MAINTENANCE_INTERVAL[entry.type] ?? 200;
+  });
+
   document.getElementById("pType").addEventListener("change", (e) => {
     if (editingPrinterId) return;
     document.getElementById("pMaintenanceInterval").value = DEFAULT_MAINTENANCE_INTERVAL[e.target.value] ?? 200;
